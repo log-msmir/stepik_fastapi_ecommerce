@@ -12,3 +12,6 @@ wheels/
 venv
 env
 uv.lock
+
+# Logs
+*.log

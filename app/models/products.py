@@ -1,5 +1,11 @@
+from datetime import datetime
 from decimal import Decimal
-from sqlalchemy import String, Boolean, Integer, Numeric, Float, text
+
+from sqlalchemy import (
+    DateTime, String, Boolean, Integer, Numeric, Float, text, func,
+    Computed, Index
+)
+from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy import ForeignKey
 
@@ -51,6 +57,27 @@ class Product(Base):
         default=0.0,
         server_default=text('0')
     )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now()
+    )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        onupdate=func.now(),
+    )
+
+    tsv: Mapped[TSVECTOR] = mapped_column(
+        TSVECTOR,
+        Computed(
+            """
+            setweight(to_tsvector('english', coalesce(name, '')), 'A')
+            || 
+            setweight(to_tsvector('english', coalesce(description, '')), 'B')
+            """,
+            persisted=True,
+        ),
+        nullable=False,
+    )
 
     category: Mapped['Category'] = relationship(
         'Category',
@@ -63,4 +90,18 @@ class Product(Base):
     reviews: Mapped[list['Review']] = relationship(
         'Review',
         back_populates='product'
+    )
+    cart_items: Mapped[list["CartItem"]] = relationship(
+        "CartItem",
+        back_populates="product",
+        cascade="all, delete-orphan"
+    )
+    order_items: Mapped[list["OrderItem"]] = relationship(
+        "OrderItem",
+        back_populates="product"
+    )
+
+
+    __table_args__ = (
+        Index("ix_products_tsv_gin", "tsv", postgresql_using="gin"),
     )
